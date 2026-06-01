@@ -11,7 +11,7 @@ export function rehydrateText(text: string, store: MappingStore): string {
   if (!mode.reversible) return text;
 
   // Match reversible placeholders: <EMAIL_1>, <PHONE_2>, etc.
-  const placeholderPattern = /<(EMAIL|IBAN|PHONE|TAX_ID|API_KEY)_\d+>/g;
+  const placeholderPattern = /<(EMAIL|IBAN|PHONE|TAX_ID|API_KEY|NAME|CITY)_\d+>/g;
 
   return text.replace(placeholderPattern, (match) => {
     const original = store.getOriginal(match);
