@@ -1,35 +1,70 @@
-# @four-bytes/four-opencode-anonymizer
+# four-opencode-anonymizer
 
-opencode-Plugin: Privacy-Gateway mit PII-Detection + reversibler Tokenisierung. Hook vor rag/memory/research/writer.
+opencode Plugin: PII-Erkennung und Anonymisierung vor LLM-Calls. Reversibel via SQLite+AES Vault.
 
-**Status:** Geplant für Wave P4c. Skeleton-Bootstrap aus Wave P0b.
+## Installation
 
-## Geplantes Verhalten
+```json
+{
+  "plugin": ["@four-bytes/four-opencode-anonymizer"]
+}
+```
 
-- Hybrid-Engine: Regex (Email, IBAN, Phone, DE Tax-IDs) + optional lokales NER (`@xenova/transformers`, v0.2+)
-- 4 Modi: `redact_for_llm`, `redact_for_logs`, `redact_for_memory`, `irreversible_export`
-- Reversible Platzhalter: `<PERSON_1>`, `<EMAIL_2>` + lokaler Mapping-Vault (SQLite + Application-Level AES via Bun crypto)
-- Audit-Diary: separater XDG-Pfad für GDPR-Nachweis
-- Loading-Order: VOR tbg/curator (in opencode.json dokumentiert)
+## Modi
 
-## Konzept-Quelle
+Gesetzt via `FOUR_ANON_MODE` env (default: `redact_for_llm`):
 
-- four-flames/four-ai-architecture/docs/patterns/PAT-006-pii-tokenization.md
-- four-bytes/four-xims-meet/docs/01-konzept-fuer-maike.md (P36)
-- Wave-Plan: four-bytes/opencode-plugins/WAVES-PLAN.md
+| Modus | Platzhalter | Mapping | Reversibel |
+|---|---|---|---|
+| `redact_for_llm` | `<EMAIL_1>` | ✅ SQLite | ✅ |
+| `redact_for_logs` | `<EMAIL_1>` | ✅ SQLite | ✅ |
+| `redact_for_memory` | `<EMAIL_1>` | ✅ SQLite | ✅ |
+| `irreversible_export` | `[EMAIL]` | ❌ | ❌ |
 
-## Implementation-Stand
+## Erkannte PII-Typen
 
-Wave P4c (sequenziell nach P4a + P4b). 8 atomare Issues geplant:
+### Regex-Detector (v0.1+)
+- **Email**: `john.doe@example.com` → `<EMAIL_1>`
+- **IBAN (DE)**: `DE89370400440532013000` → `<IBAN_1>`
+- **Telefon (DE)**: `+49 170 1234567` → `<PHONE_1>`
+- **Steuer-ID**: `12 345 678 901` → `<TAX_ID_1>`
+- **API-Key**: `sk-proj-abc123...` → `<API_KEY_1>`
 
-1. Initial skeleton + Regex-Detector (Email, IBAN, Phone, DE Tax-IDs)
-2. Mapping-Store (SQLite + AES, XDG-Pfad)
-3. 4 Modi-Logik
-4. chat.message Hook Integration
-5. Rehydrate-Mechanismus
-6. NER-Backend v0.2+ (@xenova/transformers)
-7. Tests + DE-PII Fixture-Workspace
-8. README + Sicherheits-Hinweise
+### NER-Detector (v0.2+)
+- **Personennamen**: `Herr Müller`, `Frau Dr. Schmidt` → `<NAME_1>`
+- **Städte**: `Berlin`, `München` → `<CITY_1>`
 
-## License
+## ENV-Variablen
+
+| Variable | Default | Beschreibung |
+|---|---|---|
+| `FOUR_ANON_MODE` | `redact_for_llm` | Anonymisierungs-Modus |
+| `FOUR_ANON_KEY` | auto-generiert | AES-256 Schlüssel (hex) |
+
+## Vault
+
+- **Pfad**: `${XDG_DATA_HOME:-~/.local/share}/four-opencode-anonymizer/vault.db`
+- **Key**: `${XDG_DATA_HOME:-~/.local/share}/four-opencode-anonymizer/vault.key`
+- **Schema**: `mappings(id, pii_type, iv, ciphertext, placeholder, session_id, created_at)`
+- **Verschlüsselung**: AES-256-CBC pro Eintrag mit zufälligem IV
+
+## Sicherheits-Hinweise
+
+- **Vault-Backup**: Key-Datei (`vault.key`) separat und sicher aufbewahren — ohne Key sind alle Mappings verloren
+- **Key-Rotation**: `FOUR_ANON_KEY` neu setzen → alte Mappings nicht mehr lesbar
+- **irreversible_export**: Keine Mappings gespeichert — kann nicht rückgängig gemacht werden
+- **Session-Isolation**: Jede Session hat eigene Mappings (session_id)
+- **Loading-Order**: Anonymizer MUSS vor anderen Plugins geladen werden (Privacy-Gateway)
+
+## Entwicklung
+
+```bash
+bun install
+bun test
+bun run typecheck
+bun run build
+```
+
+## Lizenz
+
 Apache-2.0

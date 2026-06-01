@@ -10,6 +10,8 @@ function genericPlaceholder(type: string): string {
     phone: "[PHONE]",
     tax_id: "[TAX_ID]",
     api_key: "[API_KEY]",
+    name: "[NAME]",
+    city: "[CITY]",
   };
   return map[type] || `[${type.toUpperCase()}]`;
 }

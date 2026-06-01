@@ -1,5 +1,14 @@
 # Project Change History
 
+## v0.6.0 — 2026-06-01
+
+### Added
+- NER-Detector (Issue #11): Heuristische Erkennung für Personennamen (Herr/Frau/Dr.) + deutsche Städte
+- Integrationstests (Issue #13): End-to-End Roundtrip (anonymize → LLM-Sim → rehydrate), Session-Isolation
+- README.md (Issue #12): Installation, Modi, ENV-Vars, Vault-Pfad, Sicherheits-Hinweise
+- src/types.ts: PiiType um `name` + `city` erweitert
+- Tests: 6 NER + 3 Integration = 39 total
+
 ## v0.5.0 — 2026-06-01
 
 ### Added
