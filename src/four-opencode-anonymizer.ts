@@ -4,6 +4,7 @@ import { createMappingStore } from "./mapping-store.js";
 import { anonymizeText } from "./anon-pipeline.js";
 import { rehydrateText } from "./rehydrate.js";
 import { getModeConfig } from "./modes.js";
+import { logDebugEvent } from "./debug-logger.js";
 
 export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
   const detector = new RegexDetector();
@@ -33,28 +34,69 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
 
         if (message.info?.role === "user") {
           // Anonymize: PII → placeholder
+          let totalAnonCount = 0;
+          let anonParts = 0;
+          const allPiiTypes = new Set<string>();
+
           for (const part of msgOutput.parts) {
             if (part.type === "text" && part.text) {
               const result = anonymizeText(part.text, sessionId, detector, store, mode);
               if (result.count > 0) {
                 part.text = result.text;
+                totalAnonCount += result.count;
+                anonParts++;
+                for (const match of result.matches) {
+                  allPiiTypes.add(match.type);
+                }
                 // eslint-disable-next-line no-console
                 console.error(`[four-anon] ${mode.mode}: anonymized ${result.count} PII for session ${sessionId}`);
               }
             }
           }
+
+          logDebugEvent("anonymize", {
+            sessionId,
+            mode: mode.mode,
+            piiFound: totalAnonCount > 0,
+            ...(totalAnonCount > 0
+              ? {
+                  totalPiiCount: totalAnonCount,
+                  partsAffected: anonParts,
+                  piiTypes: [...allPiiTypes],
+                }
+              : {}),
+          });
         } else if (message.info?.role === "assistant") {
           // Rehydrate: placeholder → original PII
+          let rehydratedParts = 0;
+          let totalRehydrated = 0;
+
           for (const part of msgOutput.parts) {
             if (part.type === "text" && part.text) {
               const original = part.text;
               part.text = rehydrateText(part.text, store);
               if (part.text !== original) {
+                rehydratedParts++;
+                const beforeCount = (original.match(/<[A-Z]+_\d+>/g) || []).length;
+                const afterCount = (part.text.match(/<[A-Z]+_\d+>/g) || []).length;
+                totalRehydrated += beforeCount - afterCount;
                 // eslint-disable-next-line no-console
                 console.error(`[four-anon] ${mode.mode}: rehydrated placeholders in assistant message`);
               }
             }
           }
+
+          logDebugEvent("rehydrate", {
+            sessionId,
+            mode: mode.mode,
+            rehydrated: rehydratedParts > 0,
+            ...(rehydratedParts > 0
+              ? {
+                  partsAffected: rehydratedParts,
+                  placeholdersRehydrated: totalRehydrated,
+                }
+              : {}),
+          });
         }
       } catch {
         // Non-blocking
