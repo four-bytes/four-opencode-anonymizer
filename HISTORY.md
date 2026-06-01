@@ -1,5 +1,13 @@
 # Project Change History
 
+## v0.5.0 — 2026-06-01
+
+### Added
+- Rehydrate (Issue #9): Assistant-Messages: Placeholder → Original-PII via MappingStore
+- `src/rehydrate.ts`: rehydrateText() mit Store-Lookup, nur in reversiblen Modes
+- Plugin-Entry: chat.message Hook erweitert für role=assistant (Rehydration)
+- Tests: 5 rehydrate tests (30 total)
+
 ## v0.3.0 — 2026-06-01
 
 ### Added
