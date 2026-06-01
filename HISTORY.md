@@ -1,5 +1,13 @@
 # Project Change History
 
+## v0.3.0 — 2026-06-01
+
+### Added
+- Anonymization Pipeline (Issue #5): chat.message Hook anonymisiert User-Nachrichten vor LLM-Call
+- `src/anon-pipeline.ts`: anonymizeText() — Detector → Store → Ersetzung
+- Plugin-Entry: chat.message Hook mit RegexDetector + MappingStore
+- Tests: 6 pipeline tests (email, store, multi-PII, clean, empty, session isolation)
+
 ## v0.2.0 — 2026-06-01
 
 ### Added
