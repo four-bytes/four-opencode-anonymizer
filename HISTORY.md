@@ -1,5 +1,14 @@
 # Project Change History
 
+## v0.4.0 — 2026-06-01
+
+### Added
+- 4 Modi (Issue #7): redact_for_llm, redact_for_logs, redact_for_memory, irreversible_export
+- `src/modes.ts`: ModeConfig, getMode() via FOUR_ANON_MODE env
+- `src/anon-pipeline.ts`: mode-aware Ersetzung (reversible vs generic placeholders)
+- irreversible_export: [EMAIL], [IBAN], [PHONE], [TAX_ID], [API_KEY] — keine Mapping-Speicherung
+- Tests: 6 mode tests (31 total)
+
 ## v0.3.0 — 2026-06-01
 
 ### Added

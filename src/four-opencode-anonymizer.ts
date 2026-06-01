@@ -2,13 +2,15 @@ import type { Plugin } from "@opencode-ai/plugin";
 import { RegexDetector } from "./detectors/regex.js";
 import { createMappingStore } from "./mapping-store.js";
 import { anonymizeText } from "./anon-pipeline.js";
+import { getModeConfig } from "./modes.js";
 
-/**
- * PII Anonymization Plugin (Wave P4c).
- */
 export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
   const detector = new RegexDetector();
   const store = createMappingStore();
+  const mode = getModeConfig();
+
+  // eslint-disable-next-line no-console
+  console.error(`[four-anon] mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
 
   return {
     "chat.message": async (input, output) => {
@@ -20,7 +22,6 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
           info?: { role?: string };
         } | undefined;
 
-        // Only anonymize user messages before they reach the LLM
         if (!message || message.info?.role !== "user") return;
 
         const msgOutput = output as {
@@ -31,19 +32,19 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
 
         for (const part of msgOutput.parts) {
           if (part.type === "text" && part.text) {
-            const result = anonymizeText(part.text, sessionId, detector, store);
+            const result = anonymizeText(part.text, sessionId, detector, store, mode);
 
             if (result.count > 0) {
               part.text = result.text;
               // eslint-disable-next-line no-console
               console.error(
-                `[four-anon] anonymized ${result.count} PII instances for session ${sessionId}`,
+                `[four-anon] ${mode.mode}: anonymized ${result.count} PII for session ${sessionId}`,
               );
             }
           }
         }
       } catch {
-        // Non-blocking — never throw from hook
+        // Non-blocking
       }
     },
   };
