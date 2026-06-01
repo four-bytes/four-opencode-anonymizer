@@ -1,5 +1,14 @@
 # Project Change History
 
+## v0.2.0 — 2026-06-01
+
+### Added
+- Mapping-Store (Issue #3): SQLite + AES-256-CBC Vault für PII-Mappings
+- `src/mapping-store.ts`: encrypt/decrypt via Bun crypto, Key-Management (env > file > auto-gen)
+- UUID7-style IDs, WAL mode, session-isolation
+- Tests: 7 cases (store/retrieve, unknown, multiple, list, isolation, clear, encrypted-at-rest)
+- `.gitignore`: vault.db, vault.key
+
 ## v0.1.0 — 2026-06-01
 
 ### Added
