@@ -1,6 +1,6 @@
 {
   "name": "@four-bytes/four-opencode-anonymizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "opencode plugin: PII detection and anonymization (Regex + NER), reversible via SQLite+AES vault",
   "license": "Apache-2.0",
   "type": "module",
@@ -18,14 +18,23 @@
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test"
   },
-  "keywords": ["opencode", "opencode-plugin", "four-bytes", "anonymizer", "pii", "privacy"],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "four-bytes",
+    "anonymizer",
+    "pii",
+    "privacy"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/four-bytes/four-opencode-anonymizer.git"
   },
   "opencode": {
     "type": "plugin",
-    "hooks": ["chat.message"]
+    "hooks": [
+      "chat.message"
+    ]
   },
   "dependencies": {
     "@opencode-ai/plugin": "^1.15.13"

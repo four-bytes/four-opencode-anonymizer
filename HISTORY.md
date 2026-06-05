@@ -3,34 +3,34 @@
 ## v0.6.0 — 2026-06-01
 
 ### Added
-- NER-Detector (Issue #11): Heuristische Erkennung für Personennamen (Herr/Frau/Dr.) + deutsche Städte
-- Integrationstests (Issue #13): End-to-End Roundtrip (anonymize → LLM-Sim → rehydrate), Session-Isolation
-- README.md (Issue #12): Installation, Modi, ENV-Vars, Vault-Pfad, Sicherheits-Hinweise
-- src/types.ts: PiiType um `name` + `city` erweitert
-- Tests: 6 NER + 3 Integration = 39 total
+- NER Detector (Issue #11): Heuristic detection for person names (Herr/Frau/Dr.) + German cities
+- Integration tests (Issue #13): End-to-end roundtrip (anonymize → LLM sim → rehydrate), session isolation
+- README.md (Issue #12): Installation, modes, ENV vars, vault path, security notes
+- src/types.ts: PiiType extended with `name` + `city`
+- Tests: 6 NER + 3 integration = 39 total
 
 ## v0.5.0 — 2026-06-01
 
 ### Added
-- Rehydrate (Issue #9): Assistant-Messages: Placeholder → Original-PII via MappingStore
-- `src/rehydrate.ts`: rehydrateText() mit Store-Lookup, nur in reversiblen Modes
-- Plugin-Entry: chat.message Hook erweitert für role=assistant (Rehydration)
+- Rehydrate (Issue #9): Assistant messages: placeholder → original PII via MappingStore
+- `src/rehydrate.ts`: rehydrateText() with store lookup, reversible modes only
+- Plugin entry: chat.message hook extended for role=assistant (rehydration)
 - Tests: 5 rehydrate tests (30 total)
 
 ## v0.3.0 — 2026-06-01
 
 ### Added
-- Anonymization Pipeline (Issue #5): chat.message Hook anonymisiert User-Nachrichten vor LLM-Call
-- `src/anon-pipeline.ts`: anonymizeText() — Detector → Store → Ersetzung
-- Plugin-Entry: chat.message Hook mit RegexDetector + MappingStore
+- Anonymization pipeline (Issue #5): chat.message hook anonymizes user messages before LLM call
+- `src/anon-pipeline.ts`: anonymizeText() — detector → store → replacement
+- Plugin entry: chat.message hook with RegexDetector + MappingStore
 - Tests: 6 pipeline tests (email, store, multi-PII, clean, empty, session isolation)
 
 ## v0.2.0 — 2026-06-01
 
 ### Added
-- Mapping-Store (Issue #3): SQLite + AES-256-CBC Vault für PII-Mappings
-- `src/mapping-store.ts`: encrypt/decrypt via Bun crypto, Key-Management (env > file > auto-gen)
-- UUID7-style IDs, WAL mode, session-isolation
+- Mapping store (Issue #3): SQLite + AES-256-CBC vault for PII mappings
+- `src/mapping-store.ts`: encrypt/decrypt via Bun crypto, key management (env > file > auto-gen)
+- UUID7-style IDs, WAL mode, session isolation
 - Tests: 7 cases (store/retrieve, unknown, multiple, list, isolation, clear, encrypted-at-rest)
 - `.gitignore`: vault.db, vault.key
 
@@ -46,6 +46,6 @@
 ## v0.0.1 — 2026-05-31
 
 ### Added
-- Initial Bootstrap (Wave P0b der opencode-plugins Strategy)
+- Initial bootstrap (Wave P0b of opencode-plugins strategy)
 - README + AGENTS.md + LICENSE (Apache-2.0)
-- Implementation kommt in Wave P4c
+- Implementation follows in Wave P4c
