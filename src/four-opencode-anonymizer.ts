@@ -123,6 +123,53 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
         // Non-blocking
       }
     },
+
+    // ── Event hook: rehydrate parts in-place on every update ───
+    // Catches streaming output (assistant messages, thought text,
+    // tool results) that may not go through chat.message.
+    "event": async (eventInput) => {
+      try {
+        const evt = eventInput.event;
+        if (evt.type !== "message.part.updated") return;
+
+        const part = evt.properties.part as { type?: string; text?: string; sessionID?: string };
+        if (part.type !== "text" || !part.text) return;
+
+        const sid = part.sessionID || "unknown";
+        const store = sessions.get(sid);
+        if (!store) return;
+
+        const original = part.text;
+        part.text = rehydrateText(part.text, store);
+        if (part.text !== original) {
+          log("info", `${mode.mode}: event-rehydrated part for session ${sid}`, {
+            sessionId: sid,
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    },
+
+    // ── Tool execute: rehydrate subagent/tool output ────────────
+    "tool.execute.after": async (_input, output) => {
+      try {
+        // Subagent results arrive as tool output — rehydrate placeholders
+        const sid = (_input as { sessionID?: string }).sessionID || "unknown";
+        const store = sessions.get(sid);
+        if (!store || !output.output) return;
+
+        const original = output.output;
+        output.output = rehydrateText(output.output, store);
+        if (output.output !== original) {
+          log("info", `${mode.mode}: rehydrated tool output for session ${sid}`, {
+            sessionId: sid,
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    },
   };
 };
 

@@ -33,7 +33,9 @@
   "opencode": {
     "type": "plugin",
     "hooks": [
-      "chat.message"
+      "chat.message",
+      "event",
+      "tool.execute.after"
     ]
   },
   "dependencies": {
