@@ -1,39 +1,19 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { RegexDetector } from "../src/detectors/regex.js";
 import { anonymizeText } from "../src/anon-pipeline.js";
 import { rehydrateText } from "../src/rehydrate.js";
-import { createMappingStore, type MappingStore } from "../src/mapping-store.js";
-import { getModeConfig, type ModeConfig } from "../src/modes.js";
-import { existsSync, unlinkSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { createSessionStore } from "../src/session-store.js";
+import { type ModeConfig } from "../src/modes.js";
 
 describe("End-to-End Pipeline", () => {
-  let store: MappingStore;
-  let detector: RegexDetector;
-  let dbPath: string;
-
-  beforeAll(() => {
-    const testDir = join(tmpdir(), "four-anon-e2e-" + Date.now());
-    mkdirSync(testDir, { recursive: true });
-    dbPath = join(testDir, "test-e2e.db");
-    store = createMappingStore(dbPath);
-    detector = new RegexDetector();
-  });
-
-  afterAll(() => {
-    store.close();
-    try { unlinkSync(dbPath); } catch {}
-    try { unlinkSync(dbPath + "-wal"); } catch {}
-    try { unlinkSync(dbPath + "-shm"); } catch {}
-  });
-
   it("roundtrip: anonymize → rehydrate (redact_for_llm)", () => {
     const mode: ModeConfig = { mode: "redact_for_llm", storeMappings: true, reversible: true };
     const original = "Kontakt: max.mustermann@firma.de, Tel: +49 170 1234567";
+    const detector = new RegexDetector();
+    const store = createSessionStore("e2e-1");
 
     // Step 1: Anonymize
-    const anon = anonymizeText(original, "e2e-1", detector, store, mode);
+    const anon = anonymizeText(original, detector, store, mode);
     expect(anon.text).not.toContain("max.mustermann@firma.de");
     expect(anon.text).not.toContain("+49 170 1234567");
 
@@ -51,8 +31,10 @@ describe("End-to-End Pipeline", () => {
   it("irreversible_export: no rehydration possible", () => {
     const mode: ModeConfig = { mode: "irreversible_export", storeMappings: false, reversible: false };
     const original = "Email: test@example.com, IBAN: DE89370400440532013000";
+    const detector = new RegexDetector();
+    const store = createSessionStore("e2e-2");
 
-    const anon = anonymizeText(original, "e2e-2", detector, store, mode);
+    const anon = anonymizeText(original, detector, store, mode);
     expect(anon.text).toContain("[EMAIL]");
     expect(anon.text).toContain("[IBAN]");
 
@@ -63,22 +45,66 @@ describe("End-to-End Pipeline", () => {
     expect(restored).not.toContain("test@example.com");
   });
 
-  it("session isolation: different sessions have separate mappings", () => {
+  it("session isolation: sessions cannot see each other's data", () => {
     const mode: ModeConfig = { mode: "redact_for_llm", storeMappings: true, reversible: true };
     
-    anonymizeText("alice@a.de", "session-a", detector, store, mode);
-    anonymizeText("bob@b.de", "session-b", detector, store, mode);
+    const detectorA = new RegexDetector();
+    const storeA = createSessionStore("session-a");
+    const detectorB = new RegexDetector();
+    const storeB = createSessionStore("session-b");
 
-    // Both sessions should have their own mappings
-    const listA = store.listBySession("session-a");
-    const listB = store.listBySession("session-b");
+    anonymizeText("alice@a.de", detectorA, storeA, mode);
+    anonymizeText("bob@b.de", detectorB, storeB, mode);
+
+    const listA = storeA.list();
+    const listB = storeB.list();
 
     expect(listA.length).toBeGreaterThanOrEqual(1);
     expect(listB.length).toBeGreaterThanOrEqual(1);
     
     // Mappings should not cross sessions
-    const placeholdersA = new Set(listA.map((m) => m.placeholder));
-    const placeholdersB = new Set(listB.map((m) => m.placeholder));
-    expect([...placeholdersA].some((p) => placeholdersB.has(p))).toBe(false);
+    const originalsA = new Set(listA.map((m) => m.original));
+    const originalsB = new Set(listB.map((m) => m.original));
+    expect([...originalsA].some((o) => originalsB.has(o))).toBe(false);
+  });
+
+  it("roundtrip with new PII types: credit card, bank account, reference", () => {
+    const mode: ModeConfig = { mode: "redact_for_llm", storeMappings: true, reversible: true };
+    const original = "Kontonummer: 1234567890, Referenz: ABC-12345, Karte: 4111111111111111";
+    const detector = new RegexDetector();
+    const store = createSessionStore("e2e-new-types");
+
+    const anon = anonymizeText(original, detector, store, mode);
+    expect(anon.text).not.toContain("1234567890");
+    expect(anon.text).not.toContain("ABC-12345");
+    expect(anon.text).not.toContain("4111111111111111");
+    expect(anon.text).toContain("<BANK_ACCOUNT_");
+    expect(anon.text).toContain("<REFERENCE_");
+    expect(anon.text).toContain("<CREDIT_CARD_");
+
+    const llmResponse = `Verarbeite: ${anon.text}`;
+    const restored = rehydrateText(llmResponse, store);
+    expect(restored).toContain("1234567890");
+    expect(restored).toContain("ABC-12345");
+    expect(restored).toContain("4111111111111111");
+  });
+
+  it("no bleed: session B cannot rehydrate session A's placeholders", () => {
+    const mode: ModeConfig = { mode: "redact_for_llm", storeMappings: true, reversible: true };
+    
+    // Session A: stores alice@secret.de
+    const detectorA = new RegexDetector();
+    const storeA = createSessionStore("session-a");
+    const resultA = anonymizeText("alice@secret.de", detectorA, storeA, mode);
+    const placeholderA = resultA.matches[0].replacement;
+
+    // Session B: independent store, has NO mapping for session A's placeholder
+    const storeB = createSessionStore("session-b");
+    const llmResponse = `Reply using ${placeholderA}`;
+    const rehydratedB = rehydrateText(llmResponse, storeB);
+
+    // Session B should NOT see session A's email
+    expect(rehydratedB).not.toContain("alice@secret.de");
+    expect(rehydratedB).toContain(placeholderA); // Placeholder left as-is
   });
 });

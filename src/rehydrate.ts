@@ -1,20 +1,21 @@
-import type { MappingStore } from "./mapping-store.js";
+import type { SessionStore } from "./session-store.js";
 import { getModeConfig } from "./modes.js";
 
 /**
  * Rehydrate: replace placeholders back to original PII.
  * Only works in reversible modes (redact_for_llm, redact_for_logs, redact_for_memory).
  * In irreversible_export mode, returns text unchanged.
+ * Store is session-scoped: placeholders from other sessions have no mapping here.
  */
-export function rehydrateText(text: string, store: MappingStore): string {
+export function rehydrateText(text: string, store: SessionStore): string {
   const mode = getModeConfig();
   if (!mode.reversible) return text;
 
-  // Match reversible placeholders: <EMAIL_1>, <PHONE_2>, etc.
-  const placeholderPattern = /<(EMAIL|IBAN|PHONE|TAX_ID|API_KEY|NAME|CITY)_\d+>/g;
+  // Match reversible placeholders: <EMAIL_1>, <PHONE_2>, etc. — all 10 types
+  const placeholderPattern = /<(EMAIL|IBAN|PHONE|TAX_ID|API_KEY|NAME|CITY|CREDIT_CARD|BANK_ACCOUNT|REFERENCE)_\d+>/g;
 
   return text.replace(placeholderPattern, (match) => {
     const original = store.getOriginal(match);
-    return original ?? match; // Unknown placeholder: leave as-is
+    return original ?? match; // Unknown placeholder (from another session?): leave as-is
   });
 }
