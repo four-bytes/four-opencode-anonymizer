@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { RegexDetector } from "./detectors/regex.js";
-import { createMappingStore } from "./mapping-store.js";
+import { createSessionStore, type SessionStore } from "./session-store.js";
 import { anonymizeText } from "./anon-pipeline.js";
 import { rehydrateText } from "./rehydrate.js";
 import { getModeConfig } from "./modes.js";
@@ -8,8 +8,10 @@ import { logDebugEvent } from "./debug-logger.js";
 
 export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
   const detector = new RegexDetector();
-  const store = createMappingStore();
   const mode = getModeConfig();
+
+  // Per-session in-memory stores: no disk, no encryption, no cross-session bleed
+  const sessions = new Map<string, SessionStore>();
 
   // eslint-disable-next-line no-console
   console.error(`[four-anon] mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
@@ -33,6 +35,13 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
         if (!msgOutput.parts) return;
 
         if (message.info?.role === "user") {
+          // Get or create session store
+          let sessionStore = sessions.get(sessionId);
+          if (!sessionStore) {
+            sessionStore = createSessionStore(sessionId);
+            sessions.set(sessionId, sessionStore);
+          }
+
           // Anonymize: PII → placeholder
           let totalAnonCount = 0;
           let anonParts = 0;
@@ -40,7 +49,7 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
 
           for (const part of msgOutput.parts) {
             if (part.type === "text" && part.text) {
-              const result = anonymizeText(part.text, sessionId, detector, store, mode);
+              const result = anonymizeText(part.text, detector, sessionStore, mode);
               if (result.count > 0) {
                 part.text = result.text;
                 totalAnonCount += result.count;
@@ -67,6 +76,10 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
               : {}),
           });
         } else if (message.info?.role === "assistant") {
+          // Get session store (must exist from user message)
+          const sessionStore = sessions.get(sessionId);
+          if (!sessionStore) return; // No mappings = nothing to rehydrate
+
           // Rehydrate: placeholder → original PII
           let rehydratedParts = 0;
           let totalRehydrated = 0;
@@ -74,7 +87,7 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
           for (const part of msgOutput.parts) {
             if (part.type === "text" && part.text) {
               const original = part.text;
-              part.text = rehydrateText(part.text, store);
+              part.text = rehydrateText(part.text, sessionStore);
               if (part.text !== original) {
                 rehydratedParts++;
                 const beforeCount = (original.match(/<[A-Z]+_\d+>/g) || []).length;

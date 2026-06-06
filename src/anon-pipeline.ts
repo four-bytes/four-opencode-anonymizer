@@ -1,5 +1,5 @@
 import type { Detector, PiiMatch, AnonymizedContent } from "./types.js";
-import type { MappingStore } from "./mapping-store.js";
+import type { SessionStore } from "./session-store.js";
 import { getModeConfig, type ModeConfig } from "./modes.js";
 
 /** Generate generic placeholder (non-reversible, no counter) */
@@ -22,12 +22,12 @@ function genericPlaceholder(type: string): string {
 /**
  * Full anonymization pipeline.
  * Mode-aware: stores mappings for reversible modes, uses generic placeholders for irreversible.
+ * Store is session-scoped: no cross-session bleed.
  */
 export function anonymizeText(
   text: string,
-  sessionId: string,
   detector: Detector,
-  store: MappingStore,
+  store: SessionStore,
   mode?: ModeConfig,
 ): AnonymizedContent {
   const config = mode || getModeConfig();
@@ -49,6 +49,8 @@ export function anonymizeText(
     for (const match of matches) {
       let placeholder = match.replacement;
       let attempt = 0;
+      // Collision avoidance within this session: if same placeholder maps to
+      // different original, append _1, _2, etc. Same original is a no-op.
       while (true) {
         const existing = store.getOriginal(placeholder);
         if (existing === null || existing === match.original) {
@@ -57,7 +59,7 @@ export function anonymizeText(
         attempt++;
         placeholder = match.replacement.replace(/>$/, `_${attempt}>`);
       }
-      store.store(match.original, placeholder, match.type, sessionId);
+      store.store(match.original, placeholder, match.type);
       match.replacement = placeholder;
     }
   }
