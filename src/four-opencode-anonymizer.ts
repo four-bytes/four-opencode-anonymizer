@@ -1,10 +1,17 @@
 import type { Plugin } from "@opencode-ai/plugin";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { RegexDetector } from "./detectors/regex.js";
 import { createSessionStore, type SessionStore } from "./session-store.js";
 import { anonymizeText } from "./anon-pipeline.js";
 import { rehydrateText } from "./rehydrate.js";
 import { getModeConfig } from "./modes.js";
 import { logDebugEvent } from "./debug-logger.js";
+
+// Read version from package.json at module load time (same pattern as four-opencode-brain)
+const VERSION: string = JSON.parse(
+  readFileSync(join(import.meta.dir, "..", "package.json"), "utf-8")
+).version;
 
 export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
   const detector = new RegexDetector();
@@ -14,27 +21,19 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
   const sessions = new Map<string, SessionStore>();
 
   // eslint-disable-next-line no-console
-  console.error(`[four-anon] mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
+  console.error(`[four-anon] v${VERSION} loaded — mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
 
   return {
     "chat.message": async (input, output) => {
       try {
-        const msgInput = input as { sessionID?: string; message?: unknown };
-        const sessionId = msgInput.sessionID || "unknown";
+        const sessionId = input.sessionID || "unknown";
+        const msgRole = output.message?.role;
 
-        const message = msgInput.message as {
-          info?: { role?: string };
-        } | undefined;
+        // Only process messages with a recognized role
+        if (!msgRole) return;
+        if (!output.parts || output.parts.length === 0) return;
 
-        if (!message) return;
-
-        const msgOutput = output as {
-          parts?: Array<{ type: string; text?: string }>;
-        };
-
-        if (!msgOutput.parts) return;
-
-        if (message.info?.role === "user") {
+        if (msgRole === "user") {
           // Get or create session store
           let sessionStore = sessions.get(sessionId);
           if (!sessionStore) {
@@ -47,7 +46,7 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
           let anonParts = 0;
           const allPiiTypes = new Set<string>();
 
-          for (const part of msgOutput.parts) {
+          for (const part of output.parts) {
             if (part.type === "text" && part.text) {
               const result = anonymizeText(part.text, detector, sessionStore, mode);
               if (result.count > 0) {
@@ -75,7 +74,7 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
                 }
               : {}),
           });
-        } else if (message.info?.role === "assistant") {
+        } else if (msgRole === "assistant") {
           // Get session store (must exist from user message)
           const sessionStore = sessions.get(sessionId);
           if (!sessionStore) return; // No mappings = nothing to rehydrate
@@ -84,7 +83,7 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
           let rehydratedParts = 0;
           let totalRehydrated = 0;
 
-          for (const part of msgOutput.parts) {
+          for (const part of output.parts) {
             if (part.type === "text" && part.text) {
               const original = part.text;
               part.text = rehydrateText(part.text, sessionStore);
