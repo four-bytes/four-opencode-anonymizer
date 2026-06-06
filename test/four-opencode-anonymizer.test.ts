@@ -3,7 +3,15 @@ import { FourAnonymizerPlugin } from "../src/four-opencode-anonymizer.js";
 
 /** Helper: create plugin and return it + a hook invoker that shares state */
 async function createPlugin() {
-  const plugin = await FourAnonymizerPlugin({} as any);
+  const mockCtx = {
+    client: {
+      app: {
+        log: () => Promise.resolve(),
+      },
+    },
+    directory: "/tmp/test",
+  } as any;
+  const plugin = await FourAnonymizerPlugin(mockCtx);
   return {
     plugin,
     /** Invoke chat.message hook, mutating output.parts in-place.
