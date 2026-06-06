@@ -84,4 +84,23 @@ describe("rehydrateText", () => {
     expect(result).not.toContain("<BANK_ACCOUNT_");
     expect(result).not.toContain("<REFERENCE_");
   });
+  it("rehydrates collision-avoidance placeholders (_1_1 suffix)", () => {
+    const store = createSessionStore("s-collision");
+    // First email maps to <EMAIL_1>
+    store.store("alice@collision.de", "<EMAIL_1>", "email");
+    // Second (different) email gets collision suffix <EMAIL_1_1>
+    store.store("bob@collision.de", "<EMAIL_1_1>", "email");
+    // Third email maps to <EMAIL_2>
+    store.store("carol@collision.de", "<EMAIL_2>", "email");
+
+    const text = "Users: <EMAIL_1>, <EMAIL_1_1>, <EMAIL_2>";
+    const result = rehydrateText(text, store);
+
+    expect(result).toContain("alice@collision.de");
+    expect(result).toContain("bob@collision.de");
+    expect(result).toContain("carol@collision.de");
+    expect(result).not.toContain("<EMAIL_1_1>");
+    expect(result).not.toContain("<EMAIL_2>");
+  });
+
 });
