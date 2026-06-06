@@ -79,7 +79,7 @@ describe("anonymizeText", () => {
     expect(storeB.list().some((m) => m.original === "alice@a.de")).toBe(false);
   });
 
-  it("collision avoidance: different originals with same placeholder get suffixes", () => {
+  it("collision avoidance: different originals with same placeholder get incremented number", () => {
     const store = createSessionStore("collision-test");
     const r1 = anonymizeText("alice@a.de", detector, store);
     expect(r1.matches[0].replacement).toBe("<EMAIL_1>");
@@ -87,7 +87,7 @@ describe("anonymizeText", () => {
     const detector2 = new RegexDetector();
     const r2 = anonymizeText("bob@b.de", detector2, store);
     expect(r2.matches[0].replacement).not.toBe("<EMAIL_1>");
-    expect(r2.matches[0].replacement).toMatch(/^<EMAIL_\d+(_\d+)?>$/);
+    expect(r2.matches[0].replacement).toBe("<EMAIL_2>");
   });
 
   it("irreversible mode uses generic labels", () => {

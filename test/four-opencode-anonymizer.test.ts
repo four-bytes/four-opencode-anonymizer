@@ -225,7 +225,7 @@ describe("FourAnonymizerPlugin (chat.message hook)", () => {
     // Second part: detector resets counters, generates <EMAIL_1>, but store has
     // alice@a.de at <EMAIL_1>, so collision avoidance gives <EMAIL_1_1>
     expect(output.parts[1].text).not.toContain("bob@b.de");
-    expect(output.parts[1].text).toMatch(/<EMAIL_\d+(_\d+)?>/);
+    expect(output.parts[1].text).toContain("<EMAIL_2>");
   });
 
   it("assistant rehydrate across multiple parts", async () => {

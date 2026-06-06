@@ -49,15 +49,17 @@ export function anonymizeText(
     for (const match of matches) {
       let placeholder = match.replacement;
       let attempt = 0;
-      // Collision avoidance within this session: if same placeholder maps to
-      // different original, append _1, _2, etc. Same original is a no-op.
+      // Collision avoidance within this session: if placeholder is already
+      // mapped to a different original, increment the number (<EMAIL_1> → <EMAIL_2>).
+      // Same original is a no-op.
+      const baseNumber = parseInt(match.replacement.match(/\d+>/)?.[0] || '1');
       while (true) {
         const existing = store.getOriginal(placeholder);
         if (existing === null || existing === match.original) {
           break;
         }
         attempt++;
-        placeholder = match.replacement.replace(/>$/, `_${attempt}>`);
+        placeholder = match.replacement.replace(/\d+>/, `${baseNumber + attempt}>`);
       }
       store.store(match.original, placeholder, match.type);
       match.replacement = placeholder;
