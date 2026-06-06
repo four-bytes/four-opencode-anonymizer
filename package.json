@@ -34,8 +34,8 @@
     "type": "plugin",
     "hooks": [
       "chat.message",
-      "event",
-      "tool.execute.after"
+      "tool.execute.after",
+      "experimental.text.complete"
     ]
   },
   "dependencies": {

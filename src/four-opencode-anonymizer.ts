@@ -32,118 +32,73 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
   log("info", `v${VERSION} loaded — mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
 
   return {
+    // ── chat.message: anonymize user input before LLM sees it ──
+    // Note: chat.message fires ONLY for user messages (role: "user"),
+    // never for assistant. Rehydration happens via other hooks.
     "chat.message": async (input, output) => {
       try {
         const sessionId = input.sessionID || "unknown";
-        const msgRole = output.message?.role;
-
         if (!output.parts || output.parts.length === 0) return;
 
-        // ── Rehydrate FIRST (always, if session has mappings) ──────
-        // Handles assistant messages, thought output, and any message
-        // containing placeholders from this session. User messages have
-        // no placeholders at this point → rehydrate is a safe no-op.
+        // Get or create session store
         let sessionStore = sessions.get(sessionId);
-        if (sessionStore) {
-          const modeLabel = mode.mode;
-          let rehydratedParts = 0;
-          let totalRehydrated = 0;
+        if (!sessionStore) {
+          sessionStore = createSessionStore(sessionId);
+          sessions.set(sessionId, sessionStore);
+        }
 
-          for (const part of output.parts) {
-            if (part.type === "text" && part.text) {
-              const original = part.text;
-              part.text = rehydrateText(part.text, sessionStore);
-              if (part.text !== original) {
-                rehydratedParts++;
-                const beforeCount = (original.match(/<[A-Z]+_\d+>/g) || []).length;
-                const afterCount = (part.text.match(/<[A-Z]+_\d+>/g) || []).length;
-                totalRehydrated += beforeCount - afterCount;
-                log("info", `${modeLabel}: rehydrated placeholders`, {
-                  sessionId,
-                  count: beforeCount - afterCount,
-                });
+        // Anonymize: PII → placeholder
+        let totalAnonCount = 0;
+        let anonParts = 0;
+        const allPiiTypes = new Set<string>();
+
+        for (const part of output.parts) {
+          if (part.type === "text" && part.text) {
+            const result = anonymizeText(part.text, detector, sessionStore, mode);
+            if (result.count > 0) {
+              part.text = result.text;
+              totalAnonCount += result.count;
+              anonParts++;
+              for (const match of result.matches) {
+                allPiiTypes.add(match.type);
               }
+              log("info", `${mode.mode}: anonymized ${result.count} PII`, {
+                count: result.count,
+                sessionId,
+              });
             }
-          }
-
-          if (rehydratedParts > 0) {
-            logDebugEvent("rehydrate", {
-              sessionId,
-              mode: modeLabel,
-              rehydrated: true,
-              partsAffected: rehydratedParts,
-              placeholdersRehydrated: totalRehydrated,
-            });
           }
         }
 
-        // ── Anonymize (user messages only) ──────────────────────────
-        if (msgRole === "user") {
-          // Get or create session store
-          if (!sessionStore) {
-            sessionStore = createSessionStore(sessionId);
-            sessions.set(sessionId, sessionStore);
-          }
-
-          // Anonymize: PII → placeholder
-          let totalAnonCount = 0;
-          let anonParts = 0;
-          const allPiiTypes = new Set<string>();
-
-          for (const part of output.parts) {
-            if (part.type === "text" && part.text) {
-              const result = anonymizeText(part.text, detector, sessionStore, mode);
-              if (result.count > 0) {
-                part.text = result.text;
-                totalAnonCount += result.count;
-                anonParts++;
-                for (const match of result.matches) {
-                  allPiiTypes.add(match.type);
-                }
-                log("info", `${mode.mode}: anonymized ${result.count} PII`, {
-                  count: result.count,
-                  sessionId,
-                });
-              }
-            }
-          }
-
-          if (totalAnonCount > 0) {
-            logDebugEvent("anonymize", {
-              sessionId,
-              mode: mode.mode,
-              piiFound: true,
-              totalPiiCount: totalAnonCount,
-              partsAffected: anonParts,
-              piiTypes: [...allPiiTypes],
-            });
-          }
+        if (totalAnonCount > 0) {
+          logDebugEvent("anonymize", {
+            sessionId,
+            mode: mode.mode,
+            piiFound: true,
+            totalPiiCount: totalAnonCount,
+            partsAffected: anonParts,
+            piiTypes: [...allPiiTypes],
+          });
         }
       } catch {
         // Non-blocking
       }
     },
 
-    // ── Event hook: rehydrate parts in-place on every update ───
-    // Catches streaming output (assistant messages, thought text,
-    // tool results) that may not go through chat.message.
-    "event": async (eventInput) => {
+    // ── Text complete: rehydrate assistant text output ────────
+    // Fires when a text part finishes streaming (text-end).
+    // The return value REPLACES the actual text — this is the
+    // only hook that can modify assistant output before display.
+    "experimental.text.complete": async (input, output) => {
       try {
-        const evt = eventInput.event;
-        if (evt.type !== "message.part.updated") return;
-
-        const part = evt.properties.part as { type?: string; text?: string; sessionID?: string };
-        if (part.type !== "text" || !part.text) return;
-
-        const sid = part.sessionID || "unknown";
-        const store = sessions.get(sid);
+        const store = sessions.get(input.sessionID);
         if (!store) return;
 
-        const original = part.text;
-        part.text = rehydrateText(part.text, store);
-        if (part.text !== original) {
-          log("info", `${mode.mode}: event-rehydrated part for session ${sid}`, {
-            sessionId: sid,
+        const original = output.text;
+        output.text = rehydrateText(output.text, store);
+        if (output.text !== original) {
+          log("info", `${mode.mode}: text-complete rehydrated output`, {
+            sessionId: input.sessionID,
           });
         }
       } catch {
