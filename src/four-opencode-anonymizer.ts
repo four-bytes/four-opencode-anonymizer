@@ -13,15 +13,23 @@ const VERSION: string = JSON.parse(
   readFileSync(join(import.meta.dir, "..", "package.json"), "utf-8")
 ).version;
 
-export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
+export const FourAnonymizerPlugin: Plugin = async (ctx) => {
   const detector = new RegexDetector();
   const mode = getModeConfig();
+  const { client, directory } = ctx;
 
   // Per-session in-memory stores: no disk, no encryption, no cross-session bleed
   const sessions = new Map<string, SessionStore>();
 
-  // eslint-disable-next-line no-console
-  console.error(`[four-anon] v${VERSION} loaded — mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
+  // Fire-and-forget log via opencode app log API — never blocking
+  const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) => {
+    client.app.log({
+      body: { service: "four-anon", level, message, extra: extra as Record<string, unknown> },
+      query: { directory },
+    }).catch(() => { /* silently drop log errors */ });
+  };
+
+  log("info", `v${VERSION} loaded — mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
 
   return {
     "chat.message": async (input, output) => {
@@ -56,8 +64,10 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
                 for (const match of result.matches) {
                   allPiiTypes.add(match.type);
                 }
-                // eslint-disable-next-line no-console
-                console.error(`[four-anon] ${mode.mode}: anonymized ${result.count} PII for session ${sessionId}`);
+                log("info", `${mode.mode}: anonymized ${result.count} PII for session ${sessionId}`, {
+                  count: result.count,
+                  sessionId,
+                });
               }
             }
           }
@@ -92,8 +102,9 @@ export const FourAnonymizerPlugin: Plugin = async (_ctx) => {
                 const beforeCount = (original.match(/<[A-Z]+_\d+>/g) || []).length;
                 const afterCount = (part.text.match(/<[A-Z]+_\d+>/g) || []).length;
                 totalRehydrated += beforeCount - afterCount;
-                // eslint-disable-next-line no-console
-                console.error(`[four-anon] ${mode.mode}: rehydrated placeholders in assistant message`);
+                log("info", `${mode.mode}: rehydrated placeholders in assistant message`, {
+                  sessionId,
+                });
               }
             }
           }
