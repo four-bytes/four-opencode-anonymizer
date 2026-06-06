@@ -1,5 +1,37 @@
 # Project Change History
 
+## v0.2.0 — 2026-06-06
+
+### Added
+- Enhanced PII detection (Issue #17): Credit cards (Luhn-validated), bank accounts, reference numbers
+- International IBAN: Extended beyond DE to generic EU format (3–7 groups of 4)
+- Tax ID refined: Keyword-triggered (Steuer-ID, St.-Nr., USt-IdNr.) to avoid false positives
+- New PiiType values: `credit_card`, `bank_account`, `reference`
+- Modes tests (Issue #17): Fresh test/modes.test.ts (12 tests covering all 4 modes)
+- Plugin hook tests: test/four-opencode-anonymizer.test.ts (15 tests: anonymize, rehydrate, bleed prevention)
+- 31 regex detector tests, 9 session-store tests
+
+### Changed
+- **BREAKING**: Replaced SQLite+AES MappingStore with in-memory SessionStore (Issue #17)
+  - No more vault.db, vault.key, FOUR_ANON_KEY, XDG_DATA_HOME
+  - Mappings are per-session Map — zero cross-session bleed
+  - Destroyed on process exit
+- anon-pipeline.ts: Uses SessionStore, removed sessionId parameter (store carries its own)
+- rehydrate.ts: Session-scoped lookup via SessionStore
+- Plugin (four-opencode-anonymizer.ts): Maps sessionId → SessionStore per session
+
+### Removed
+- src/mapping-store.ts (157 lines SQLite+AES)
+- test/mapping-store.test.ts (7 tests, obsolete)
+- All node:crypto usage (createCipheriv, createDecipheriv, etc.)
+
+### Fixed
+- debug-logger.test.ts: Removed spy race condition
+- Cross-session bleed: getOriginal() no longer global — scoped to session Map
+
+### Tests
+- 101 pass, 0 fail, 218 expects across 9 files
+
 ## v0.6.0 — 2026-06-01
 
 ### Added
