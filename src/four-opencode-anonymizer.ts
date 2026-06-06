@@ -37,13 +37,49 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
         const sessionId = input.sessionID || "unknown";
         const msgRole = output.message?.role;
 
-        // Only process messages with a recognized role
-        if (!msgRole) return;
         if (!output.parts || output.parts.length === 0) return;
 
+        // ── Rehydrate FIRST (always, if session has mappings) ──────
+        // Handles assistant messages, thought output, and any message
+        // containing placeholders from this session. User messages have
+        // no placeholders at this point → rehydrate is a safe no-op.
+        let sessionStore = sessions.get(sessionId);
+        if (sessionStore) {
+          const modeLabel = mode.mode;
+          let rehydratedParts = 0;
+          let totalRehydrated = 0;
+
+          for (const part of output.parts) {
+            if (part.type === "text" && part.text) {
+              const original = part.text;
+              part.text = rehydrateText(part.text, sessionStore);
+              if (part.text !== original) {
+                rehydratedParts++;
+                const beforeCount = (original.match(/<[A-Z]+_\d+>/g) || []).length;
+                const afterCount = (part.text.match(/<[A-Z]+_\d+>/g) || []).length;
+                totalRehydrated += beforeCount - afterCount;
+                log("info", `${modeLabel}: rehydrated placeholders`, {
+                  sessionId,
+                  count: beforeCount - afterCount,
+                });
+              }
+            }
+          }
+
+          if (rehydratedParts > 0) {
+            logDebugEvent("rehydrate", {
+              sessionId,
+              mode: modeLabel,
+              rehydrated: true,
+              partsAffected: rehydratedParts,
+              placeholdersRehydrated: totalRehydrated,
+            });
+          }
+        }
+
+        // ── Anonymize (user messages only) ──────────────────────────
         if (msgRole === "user") {
           // Get or create session store
-          let sessionStore = sessions.get(sessionId);
           if (!sessionStore) {
             sessionStore = createSessionStore(sessionId);
             sessions.set(sessionId, sessionStore);
@@ -64,7 +100,7 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
                 for (const match of result.matches) {
                   allPiiTypes.add(match.type);
                 }
-                log("info", `${mode.mode}: anonymized ${result.count} PII for session ${sessionId}`, {
+                log("info", `${mode.mode}: anonymized ${result.count} PII`, {
                   count: result.count,
                   sessionId,
                 });
@@ -72,54 +108,16 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
             }
           }
 
-          logDebugEvent("anonymize", {
-            sessionId,
-            mode: mode.mode,
-            piiFound: totalAnonCount > 0,
-            ...(totalAnonCount > 0
-              ? {
-                  totalPiiCount: totalAnonCount,
-                  partsAffected: anonParts,
-                  piiTypes: [...allPiiTypes],
-                }
-              : {}),
-          });
-        } else if (msgRole === "assistant") {
-          // Get session store (must exist from user message)
-          const sessionStore = sessions.get(sessionId);
-          if (!sessionStore) return; // No mappings = nothing to rehydrate
-
-          // Rehydrate: placeholder → original PII
-          let rehydratedParts = 0;
-          let totalRehydrated = 0;
-
-          for (const part of output.parts) {
-            if (part.type === "text" && part.text) {
-              const original = part.text;
-              part.text = rehydrateText(part.text, sessionStore);
-              if (part.text !== original) {
-                rehydratedParts++;
-                const beforeCount = (original.match(/<[A-Z]+_\d+>/g) || []).length;
-                const afterCount = (part.text.match(/<[A-Z]+_\d+>/g) || []).length;
-                totalRehydrated += beforeCount - afterCount;
-                log("info", `${mode.mode}: rehydrated placeholders in assistant message`, {
-                  sessionId,
-                });
-              }
-            }
+          if (totalAnonCount > 0) {
+            logDebugEvent("anonymize", {
+              sessionId,
+              mode: mode.mode,
+              piiFound: true,
+              totalPiiCount: totalAnonCount,
+              partsAffected: anonParts,
+              piiTypes: [...allPiiTypes],
+            });
           }
-
-          logDebugEvent("rehydrate", {
-            sessionId,
-            mode: mode.mode,
-            rehydrated: rehydratedParts > 0,
-            ...(rehydratedParts > 0
-              ? {
-                  partsAffected: rehydratedParts,
-                  placeholdersRehydrated: totalRehydrated,
-                }
-              : {}),
-          });
         }
       } catch {
         // Non-blocking
