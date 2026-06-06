@@ -1,4 +1,14 @@
-export type PiiType = "email" | "iban" | "phone" | "tax_id" | "api_key" | "name" | "city";
+export type PiiType =
+  | "email"
+  | "iban"
+  | "phone"
+  | "tax_id"
+  | "api_key"
+  | "name"
+  | "city"
+  | "credit_card"
+  | "bank_account"
+  | "reference";
 
 export interface PiiMatch {
   /** PII category */

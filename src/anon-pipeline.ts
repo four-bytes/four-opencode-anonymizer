@@ -12,6 +12,9 @@ function genericPlaceholder(type: string): string {
     api_key: "[API_KEY]",
     name: "[NAME]",
     city: "[CITY]",
+    credit_card: "[CREDIT_CARD]",
+    bank_account: "[BANK_ACCOUNT]",
+    reference: "[REFERENCE]",
   };
   return map[type] || `[${type.toUpperCase()}]`;
 }
