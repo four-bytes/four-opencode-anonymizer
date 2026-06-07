@@ -1,5 +1,10 @@
 # Project Change History
 
+## v0.2.1 — 2026-06-07
+
+### Fixed
+- Reference regex false-positive: "<REFERENCE_1>" word detected as PII #28 — added `\b` word boundary after keyword group
+
 ## v0.2.0 — 2026-06-06
 
 ### Added
