@@ -90,7 +90,7 @@ const RULES: RegexRule[] = [
   // ── Reference Number (keyword-triggered) ───────────────
   {
     type: "reference",
-    pattern: /\b(?:Referenz|Ref\.|Kunden(?:-?nummer)?|Kd\.-Nr\.|Vorgangs(?:-?nummer)?|Rechnungs(?:-?nummer)?|RG\.-Nr\.|Auftrags(?:-?nummer)?|Beleg(?:-?nummer)?|Ticket(?:-?nummer)?|Fall(?:-?nummer)?)\b\s*[:#]?\s*([A-Z0-9][\-A-Z0-9\/]{2,40})\b/gi,
+    pattern: /\b(?i:Referenz|Ref\.|Kunden(?:-?nummer)?|Kd\.-Nr\.|Vorgangs(?:-?nummer)?|Rechnungs(?:-?nummer)?|RG\.-Nr\.|Auftrags(?:-?nummer)?|Beleg(?:-?nummer)?|Ticket(?:-?nummer)?|Fall(?:-?nummer)?)\b\s*[:#]?\s*([A-Z0-9][\-A-Z0-9\/]{2,40})\b/g,
     label: "REFERENCE",
     priority: 8,
   },
