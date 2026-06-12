@@ -1,5 +1,8 @@
 # four-opencode-anonymizer
 
+[![npm](https://img.shields.io/npm/v/@four-bytes/four-opencode-anonymizer)](https://www.npmjs.com/package/@four-bytes/four-opencode-anonymizer)
+[![license](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
+[![bun](https://img.shields.io/badge/runtime-bun-orange)](https://bun.sh)
 OpenCode plugin: PII detection and anonymization before LLM calls. Reversible via in-memory session store — no disk, no persistence, zero cross-session bleed.
 
 ## Installation
@@ -74,3 +77,7 @@ bun run build
 ## License
 
 Apache-2.0
+
+---
+
+> If this plugin saves you tokens, consider leaving a ⭐ on [GitHub](https://github.com/four-bytes/four-opencode-anonymizer).
