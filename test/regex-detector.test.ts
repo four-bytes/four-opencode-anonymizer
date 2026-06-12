@@ -237,4 +237,20 @@ describe("RegexDetector", () => {
     expect(emails[0].replacement).toBe("<EMAIL_1>");
     expect(emails[1].replacement).toBe("<EMAIL_2>");
   });
+
+  // ── English/Tech Word False-Positive Regression (#35)
+  it("does NOT detect common English/tech words as PII", () => {
+    const safeWords = [
+      "ticket", "chat", "teams", "fallback", "reference",
+      "account", "key", "case", "id", "session", "message", "token",
+    ];
+    for (const word of safeWords) {
+      const matches = detector.detect(
+        `The ${word} was processed successfully.`
+      );
+      if (matches.length > 0) {
+        throw new Error(`Word "${word}" was falsely detected as PII: ${matches[0].type} (${matches[0].match})`);
+      }
+    }
+  });
 });
