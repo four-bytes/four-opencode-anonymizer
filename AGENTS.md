@@ -14,4 +14,4 @@ Standards-Pointer: `~/ai-shared-rules/AGENTS.md` + Meta-Repo `four-bytes/opencod
 - P0b Bootstrap (jetzt)
 - P4c Implementation (nach P4b tbg Policy-Engine)
 
-- **Console logging:** Plugins MUST use `_client?.app?.log()` for all logging in plugin mode — `console.log` / `console.warn` / `console.error` is ONLY permitted for the initial startup `"init"` message. Console output in plugin mode breaks the terminal UI.
+- **Console logging:** Plugins MUST use `client.app.log()` for all logging in plugin mode — `console.log` / `console.warn` / `console.error` is ONLY permitted for the initial startup `"init"` message. Console output in plugin mode breaks the terminal UI.
