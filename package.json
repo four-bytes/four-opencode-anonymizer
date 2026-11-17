@@ -1,6 +1,6 @@
 {
   "name": "@four-bytes/four-opencode-anonymizer",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "opencode plugin: PII detection and anonymization (Regex + NER), reversible via SQLite+AES vault",
   "license": "Apache-2.0",
   "type": "module",
@@ -14,6 +14,7 @@
   },
   "scripts": {
     "build": "bun build src/four-opencode-anonymizer.ts --outdir dist --target bun --format esm",
+    "postinstall": "bun run build",
     "dev": "bun build src/four-opencode-anonymizer.ts --outdir dist --target bun --format esm --watch",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test"
