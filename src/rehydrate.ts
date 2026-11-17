@@ -2,12 +2,20 @@ import type { SessionStore } from "./session-store.js";
 import { getModeConfig } from "./modes.js";
 
 /**
- * Rehydrate: replace placeholders back to original PII.
- * Only works in reversible modes (redact_for_llm, redact_for_logs, redact_for_memory).
- * In irreversible_export mode, returns text unchanged.
+ * Rehydrate placeholders for **display only**.
+ *
+ * HARD RULE: never pass the result of this function into a message part, tool
+ * output, tool argument, system prompt or anything else the model provider may
+ * receive. Model-bound content is scrubbed by `src/model-bound.ts`; rehydrating
+ * it would write originals back into session history and every later request.
+ * opencode has no display-only hook for server plugins, so this plugin does not
+ * call this function automatically — a TUI/CLI layer may call it for rendering.
+ *
+ * Only works in reversible modes (redact_for_llm, redact_for_logs,
+ * redact_for_memory). In irreversible_export mode, returns text unchanged.
  * Store is session-scoped: placeholders from other sessions have no mapping here.
  */
-export function rehydrateText(text: string, store: SessionStore): string {
+export function rehydrateForDisplay(text: string, store: SessionStore): string {
   const mode = getModeConfig();
   if (!mode.reversible) return text;
 

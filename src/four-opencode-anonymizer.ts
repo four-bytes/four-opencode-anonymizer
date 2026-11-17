@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { RegexDetector } from "./detectors/regex.js";
 import { createSessionStore, type SessionStore } from "./session-store.js";
 import { anonymizeText } from "./anon-pipeline.js";
-import { rehydrateText } from "./rehydrate.js";
+import { anonymizeModelMessages, anonymizeSystem, type ModelBoundMessage } from "./model-bound.js";
 import { getModeConfig } from "./modes.js";
 import { logDebugEvent } from "./debug-logger.js";
 
@@ -18,8 +18,20 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
   const mode = getModeConfig();
   const { client, directory } = ctx;
 
-  // Per-session in-memory stores: no disk, no encryption, no cross-session bleed
+  // Per-session in-memory stores: no disk, no encryption, no cross-session bleed.
+  // Lifecycle: created on first user message, deleted on `session.deleted`,
+  // cleared on plugin dispose. See docs/model-bound-paths.md.
   const sessions = new Map<string, SessionStore>();
+
+  const getSessionStore = (sessionId: string | undefined): SessionStore => {
+    const id = sessionId || "unknown";
+    let store = sessions.get(id);
+    if (!store) {
+      store = createSessionStore(id);
+      sessions.set(id, store);
+    }
+    return store;
+  };
 
   // Fire-and-forget log via opencode app log API — never blocking
   const log = (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, unknown>) => {
@@ -32,20 +44,17 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
   log("info", `v${VERSION} loaded — mode: ${mode.mode} (store=${mode.storeMappings}, reversible=${mode.reversible})`);
 
   return {
-    // ── chat.message: anonymize user input before LLM sees it ──
-    // Note: chat.message fires ONLY for user messages (role: "user"),
-    // never for assistant. Rehydration happens via other hooks.
+    // ── chat.message: anonymize user input before it is persisted ──
+    // Fires before the user message is saved (prompt.ts:983), so placeholders
+    // (not originals) become history. Attached text/plain files have already
+    // been expanded into synthetic text parts (prompt.ts:771-780), so they are
+    // covered here. Binary attachments are not text-scannable (see docs).
     "chat.message": async (input, output) => {
       try {
         const sessionId = input.sessionID || "unknown";
         if (!output.parts || output.parts.length === 0) return;
 
-        // Get or create session store
-        let sessionStore = sessions.get(sessionId);
-        if (!sessionStore) {
-          sessionStore = createSessionStore(sessionId);
-          sessions.set(sessionId, sessionStore);
-        }
+        const sessionStore = getSessionStore(sessionId);
 
         // Anonymize: PII → placeholder
         let totalAnonCount = 0;
@@ -85,19 +94,19 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
       }
     },
 
-    // ── Text complete: rehydrate assistant text output ────────
-    // Fires when a text part finishes streaming (text-end).
-    // The return value REPLACES the actual text — this is the
-    // only hook that can modify assistant output before display.
+    // ── Text complete: scrub assistant text before it is persisted ──
+    // The returned text replaces the part that is written to session storage
+    // (processor.ts:811-829) and later replayed to the provider. NEVER
+    // rehydrate here: that would write originals into history. Display
+    // rehydration is a separate, explicit `rehydrateForDisplay()` call.
     "experimental.text.complete": async (input, output) => {
       try {
-        const store = sessions.get(input.sessionID);
-        if (!store) return;
-
-        const original = output.text;
-        output.text = rehydrateText(output.text, store);
-        if (output.text !== original) {
-          log("info", `${mode.mode}: text-complete rehydrated output`, {
+        const store = getSessionStore(input.sessionID);
+        const result = anonymizeText(output.text, detector, store, mode);
+        output.text = result.text;
+        if (result.count > 0) {
+          log("info", `${mode.mode}: scrubbed assistant output before persist`, {
+            count: result.count,
             sessionId: input.sessionID,
           });
         }
@@ -106,24 +115,102 @@ export const FourAnonymizerPlugin: Plugin = async (ctx) => {
       }
     },
 
-    // ── Tool execute: rehydrate subagent/tool output ────────────
-    "tool.execute.after": async (_input, output) => {
+    // ── Tool execute: scrub tool output before the model sees it ──
+    // `output.output` is persisted as tool part state and replayed in later
+    // requests (tools.ts:103-147, message-v2.ts:303-334). NEVER rehydrate.
+    "tool.execute.after": async (input, output) => {
       try {
-        // Subagent results arrive as tool output — rehydrate placeholders
-        const sid = (_input as { sessionID?: string }).sessionID || "unknown";
-        const store = sessions.get(sid);
-        if (!store || !output.output) return;
+        const sid = input.sessionID || "unknown";
+        const store = getSessionStore(sid);
+        let count = 0;
 
-        const original = output.output;
-        output.output = rehydrateText(output.output, store);
-        if (output.output !== original) {
-          log("info", `${mode.mode}: rehydrated tool output for session ${sid}`, {
+        // Built-in tools expose `output` (tools.ts:103-147).
+        if (typeof output.output === "string" && output.output) {
+          const result = anonymizeText(output.output, detector, store, mode);
+          output.output = result.text;
+          count += result.count;
+        }
+
+        // MCP tools expose `content: [{ type: "text", text }]` instead
+        // (tools.ts:116-150); scrub it here so the write-time path is covered too.
+        const content = (output as unknown as { content?: Array<{ type?: string; text?: string }> }).content;
+        if (Array.isArray(content)) {
+          for (const item of content) {
+            if (item && item.type === "text" && typeof item.text === "string") {
+              const result = anonymizeText(item.text, detector, store, mode);
+              item.text = result.text;
+              count += result.count;
+            }
+          }
+        }
+
+        if (count > 0) {
+          log("info", `${mode.mode}: scrubbed tool output for session ${sid}`, {
+            count,
             sessionId: sid,
           });
         }
       } catch {
         // Non-blocking
       }
+    },
+
+    // ── Final gate for everything that reaches the provider ──
+    // Runs right before toModelMessages (prompt.ts:1325-1331) and covers
+    // history written before the plugin loaded, other plugins' additions,
+    // reasoning parts, tool inputs/outputs and error text.
+    "experimental.chat.messages.transform": async (_input, output) => {
+      try {
+        const count = anonymizeModelMessages(
+          output.messages as unknown as ModelBoundMessage[],
+          detector,
+          getSessionStore,
+          mode,
+        );
+        if (count > 0) {
+          log("info", `${mode.mode}: scrubbed ${count} PII from model-bound history`, {
+            count,
+          });
+          logDebugEvent("model-transform", { mode: mode.mode, totalPiiCount: count });
+        }
+      } catch {
+        // Non-blocking
+      }
+    },
+
+    // ── System prompt additions are model-bound too ──
+    // request.ts:70 runs this for every provider request, including small tasks.
+    "experimental.chat.system.transform": async (input, output) => {
+      try {
+        const store = getSessionStore(input.sessionID);
+        const count = anonymizeSystem(output.system, detector, store, mode);
+        if (count > 0) {
+          log("info", `${mode.mode}: scrubbed ${count} PII from system prompt`, {
+            count,
+            sessionId: input.sessionID,
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    },
+
+    // ── Session lifecycle cleanup ──
+    // Without this the in-memory map grows for the whole process lifetime.
+    event: async (input) => {
+      try {
+        if (input.event.type === "session.deleted") {
+          const sessionId = input.event.properties.info.id;
+          sessions.delete(sessionId);
+          log("debug", `session store cleared`, { sessionId });
+        }
+      } catch {
+        // Non-blocking
+      }
+    },
+
+    dispose: async () => {
+      sessions.clear();
     },
   };
 };

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { RegexDetector } from "../src/detectors/regex.js";
 import { anonymizeText } from "../src/anon-pipeline.js";
-import { rehydrateText } from "../src/rehydrate.js";
+import { rehydrateForDisplay } from "../src/rehydrate.js";
 import { createSessionStore } from "../src/session-store.js";
 import { type ModeConfig } from "../src/modes.js";
 
@@ -21,7 +21,7 @@ describe("End-to-End Pipeline", () => {
     const llmResponse = `Ihre Daten: ${anon.text} — wir melden uns.`;
 
     // Step 3: Rehydrate
-    const restored = rehydrateText(llmResponse, store);
+    const restored = rehydrateForDisplay(llmResponse, store);
     expect(restored).toContain("max.mustermann@firma.de");
     expect(restored).toContain("+49 170 1234567");
     expect(restored).not.toContain("<EMAIL_");
@@ -40,7 +40,7 @@ describe("End-to-End Pipeline", () => {
 
     // Rehydration should NOT restore (generic placeholders)
     const llmResponse = `Daten: ${anon.text}`;
-    const restored = rehydrateText(llmResponse, store);
+    const restored = rehydrateForDisplay(llmResponse, store);
     expect(restored).toContain("[EMAIL]");
     expect(restored).not.toContain("test@example.com");
   });
@@ -83,7 +83,7 @@ describe("End-to-End Pipeline", () => {
     expect(anon.text).toContain("<CREDIT_CARD_");
 
     const llmResponse = `Verarbeite: ${anon.text}`;
-    const restored = rehydrateText(llmResponse, store);
+    const restored = rehydrateForDisplay(llmResponse, store);
     expect(restored).toContain("1234567890");
     expect(restored).toContain("ABC-12345");
     expect(restored).toContain("4111111111111111");
@@ -101,7 +101,7 @@ describe("End-to-End Pipeline", () => {
     // Session B: independent store, has NO mapping for session A's placeholder
     const storeB = createSessionStore("session-b");
     const llmResponse = `Reply using ${placeholderA}`;
-    const rehydratedB = rehydrateText(llmResponse, storeB);
+    const rehydratedB = rehydrateForDisplay(llmResponse, storeB);
 
     // Session B should NOT see session A's email
     expect(rehydratedB).not.toContain("alice@secret.de");
