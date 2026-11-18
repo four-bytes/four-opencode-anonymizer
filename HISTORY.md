@@ -8,8 +8,8 @@
 - **Write-time scrub**: assistant text (`text.complete`) and tool output (`tool.execute.after`) are anonymized before opencode persists them.
 - **Request-time catch-all**: new `experimental.chat.messages.transform` anonymizes history text, reasoning parts, tool input/output/error and `errorText`; `experimental.chat.system.transform` anonymizes system additions.
 - **Session cleanup**: `session.deleted` drops the per-session store; `dispose` clears all stores.
-- **Tool-argument keys anonymized** (review round): `anonymizeValue()` anonymized only values, so a PII value used as an object key shipped to the provider as a key name. Keys now run through the pipeline too; colliding results get a `_2`/`_3` suffix instead of silently overwriting an entry.
-- **README claim narrowed** (review round): "the model always sees placeholders" → placeholders for *detected PII on covered paths*; detector gaps, binary attachments, uncovered paths and swallowed hook errors stay documented as best-effort.
+- **Tool-argument keys anonymized**: `anonymizeValue()` anonymized only values, so a PII value used as an object key shipped to the provider as a key name. Keys now run through the pipeline too; colliding results get a `_2`/`_3` suffix instead of silently overwriting an entry.
+- **README claim narrowed**: "the model always sees placeholders" → placeholders for *detected PII on covered paths*; detector gaps, binary attachments, uncovered paths and swallowed hook errors stay documented as best-effort.
 
 ### Added
 - `src/model-bound.ts` — final anonymization gate for model-bound content.

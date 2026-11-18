@@ -203,7 +203,7 @@ describe("model-bound paths — synthetic multi-turn", () => {
   });
 });
 describe("anonymizeValue — object keys are model-bound", () => {
-  // Built at runtime so this file contains no literal address.
+  // Built at runtime so the new key tests add no literal addresses.
   const local = (...parts: string[]) => parts.join("@");
 
   const irreversible: ModeConfig = {
