@@ -81,9 +81,32 @@ export function anonymizeValue(
     let count = 0;
     const next: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
+      // Keys are model-bound too: a PII value used as an object key would
+      // otherwise ship unchanged to the provider as a key name.
+      const keyResult = anonymizeText(key, detector, store, mode);
+      count += keyResult.count;
+
       const result = anonymizeValue(item, detector, store, mode);
       count += result.count;
-      next[key] = result.value;
+
+      // Two distinct keys can anonymize to the same placeholder (or a key can
+      // already look like one). Suffix instead of silently dropping an entry.
+      let outKey = keyResult.text;
+      if (Object.prototype.hasOwnProperty.call(next, outKey)) {
+        let suffix = 2;
+        while (Object.prototype.hasOwnProperty.call(next, `${outKey}_${suffix}`)) {
+          suffix++;
+        }
+        outKey = `${outKey}_${suffix}`;
+      }
+      // defineProperty, not assignment: `next["__proto__"] = x` would set the
+      // prototype instead of adding an own key (and drop the entry).
+      Object.defineProperty(next, outKey, {
+        value: result.value,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
     }
     return { value: next, count };
   }

@@ -1,6 +1,6 @@
 {
   "name": "@four-bytes/four-opencode-anonymizer",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "opencode plugin: PII detection and anonymization (Regex), reversible display mappings via an in-memory session store",
   "license": "Apache-2.0",
   "type": "module",

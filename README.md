@@ -25,13 +25,17 @@ Set via `FOUR_ANON_MODE` env (default: `redact_for_llm`):
 | `irreversible_export` | `[EMAIL]` | ❌ | ❌ |
 
 Reversible means the session store can resolve placeholders for a **display**
-layer. It does not mean the plugin writes originals back into messages: the
-model always sees placeholders. See [Separating rehydration](#separating-rehydration).
+layer. It does not mean the plugin writes originals back into messages: for
+**detected PII on covered paths**, the model receives placeholders only. This is
+best-effort, not a guarantee — detector gaps, binary attachments, uncovered
+paths and swallowed hook errors are listed in
+[docs/model-bound-paths.md](docs/model-bound-paths.md#3-detector-limits). See
+[Separating rehydration](#separating-rehydration).
 
 ## Detected PII Types (10 total)
 
 ### Regex Detector
-- **Email**: `john.doe@example.com` → `<EMAIL_1>`
+- **Email**: any address matching the email pattern → `<EMAIL_1>`
 - **IBAN (international)**: `DE89370400440532013000`, `FR76 3000 6000 0112...` → `<IBAN_1>`
 - **Phone (DE)**: `+49 170 1234567` → `<PHONE_1>`
 - **Tax ID** (keyword-triggered): `Steuer-ID: 12 345 678 901`, `USt-IdNr.: DE123456789` → `<TAX_ID_1>`
@@ -103,7 +107,7 @@ the helper directly for rendering.
 
 ```bash
 bun install
-bun test        # 123 tests, 0 failures
+bun test        # 126 tests, 0 failures
 bun run typecheck
 bun run build
 ```

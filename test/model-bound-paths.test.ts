@@ -1,5 +1,9 @@
 import { describe, it, expect } from "bun:test";
+import type { ModeConfig } from "../src/modes.js";
 import { FourAnonymizerPlugin } from "../src/four-opencode-anonymizer.js";
+import { anonymizeValue } from "../src/model-bound.js";
+import { RegexDetector } from "../src/detectors/regex.js";
+import { getModeConfig } from "../src/modes.js";
 import { createSessionStore } from "../src/session-store.js";
 import { rehydrateForDisplay } from "../src/rehydrate.js";
 
@@ -196,5 +200,66 @@ describe("model-bound paths — synthetic multi-turn", () => {
     );
     expect(JSON.stringify(payload)).toContain("<EMAIL_1>");
     expect(JSON.stringify(payload)).not.toContain(USER_EMAIL);
+  });
+});
+describe("anonymizeValue — object keys are model-bound", () => {
+  // Built at runtime so this file contains no literal address.
+  const local = (...parts: string[]) => parts.join("@");
+
+  const irreversible: ModeConfig = {
+    mode: "irreversible_export",
+    storeMappings: false,
+    reversible: false,
+  };
+
+  it("anonymizes keys, not just values", () => {
+    const detector = new RegexDetector();
+    const store = createSessionStore("keys-reversible");
+    const email = local("key-alpha", "example.com");
+    const input = { [email]: "contact", name: "Hans" };
+
+    const result = anonymizeValue(input, detector, store, getModeConfig());
+    const serialized = JSON.stringify(result.value);
+
+    expect(serialized).not.toContain(email);
+    expect(serialized).toContain("<EMAIL_1>");
+    expect(serialized).toContain("contact");
+    expect(serialized).toContain("Hans");
+  });
+
+  it("keeps colliding keys distinct with a suffix", () => {
+    const detector = new RegexDetector();
+    const store = createSessionStore("keys-collision");
+    const emailA = local("key-beta", "example.com");
+    const emailB = local("key-gamma", "example.com");
+    const input: Record<string, number> = { [emailA]: 1, [emailB]: 2, plain: 3 };
+
+    const result = anonymizeValue(input, detector, store, irreversible);
+    const next = result.value as Record<string, unknown>;
+    const keys = Object.keys(next);
+
+    // Both addresses map to the same generic label in irreversible mode.
+    expect(keys).toContain("[EMAIL]");
+    expect(keys).toContain("[EMAIL]_2");
+    expect(keys).toContain("plain");
+    expect(keys).toHaveLength(3);
+    expect(next["[EMAIL]"]).toBe(1);
+    expect(next["[EMAIL]_2"]).toBe(2);
+    expect(JSON.stringify(next)).not.toContain(emailA);
+    expect(JSON.stringify(next)).not.toContain(emailB);
+  });
+
+  it("keeps __proto__ and constructor as own keys", () => {
+    const detector = new RegexDetector();
+    const store = createSessionStore("keys-special");
+    const input: Record<string, unknown> = { ["__proto__"]: { foo: "bar" }, constructor: "c" };
+
+    const result = anonymizeValue(input, detector, store, getModeConfig());
+    const next = result.value as Record<string, unknown>;
+
+    expect(Object.keys(next)).toEqual(["__proto__", "constructor"]);
+    expect(Object.getPrototypeOf(next)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(next, "__proto__")?.value).toEqual({ foo: "bar" });
+    expect(JSON.stringify(next)).toBe('{"__proto__":{"foo":"bar"},"constructor":"c"}');
   });
 });
