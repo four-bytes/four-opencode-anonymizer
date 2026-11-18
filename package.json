@@ -1,7 +1,7 @@
 {
   "name": "@four-bytes/four-opencode-anonymizer",
-  "version": "0.2.3",
-  "description": "opencode plugin: PII detection and anonymization (Regex + NER), reversible via SQLite+AES vault",
+  "version": "0.4.0",
+  "description": "opencode plugin: PII detection and anonymization (Regex), reversible display mappings via an in-memory session store",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/four-opencode-anonymizer.js",
@@ -35,8 +35,12 @@
     "type": "plugin",
     "hooks": [
       "chat.message",
+      "experimental.text.complete",
       "tool.execute.after",
-      "experimental.text.complete"
+      "experimental.chat.messages.transform",
+      "experimental.chat.system.transform",
+      "event",
+      "dispose"
     ]
   },
   "dependencies": {
